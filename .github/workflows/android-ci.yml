@@ -1,0 +1,49 @@
+name: Phantom X build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install NDK (with retry)
+        run: |
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i"
+            if sdkmanager --install "ndk;26.1.10909125"; then
+              exit 0
+            fi
+            rm -rf "$ANDROID_HOME/ndk" "$ANDROID_HOME/.temp"
+            sleep 10
+          done
+          echo "NDK install failed after 5 attempts"
+          exit 1
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Assemble debug APK
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: gradle assembleDebug -PwithWarp=true --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phantomx-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
